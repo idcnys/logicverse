@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useEffect } from 'react';
 import { useCircuitStore } from '../../store';
 import LogicNode from './LogicNode';
@@ -13,21 +14,28 @@ interface CanvasProps {
 
 const CircuitCanvas: React.FC<CanvasProps> = ({ addingType, setAddingType, toolMode }) => {
     const svgRef = useRef<SVGSVGElement>(null);
-    const { nodes, connections, addNode, updatePosition, selectNode, selectRegion, wiringSourceId, nodes: allNodes, cancelWiring, selectedNodeIds } = useCircuitStore();
+    const { nodes, connections, addNode, removeNodes, updatePosition, selectNode, selectRegion, wiringSourceId, nodes: allNodes, cancelWiring, selectedNodeIds, createCustomComponent, ungroupNode, saveSnapshot } = useCircuitStore();
     
-    // Viewport State
-    const [pan, setPan] = useState<Vector2>({ x: 0, y: 0 });
-    const [zoom, setZoom] = useState(1);
+    // Viewport State combined to ensure atomic updates during zoom events
+    const [view, setView] = useState<{ pan: Vector2, zoom: number }>({ 
+        pan: { x: 0, y: 0 }, 
+        zoom: 1 
+    });
+    const { pan, zoom } = view;
     
     // Interaction State
     const [isDragging, setIsDragging] = useState(false);
     const [dragStart, setDragStart] = useState<Vector2>({ x: 0, y: 0 });
     const [dragNodeId, setDragNodeId] = useState<string | null>(null);
     const [mousePos, setMousePos] = useState<Vector2>({ x: 0, y: 0 });
+    const isNodeDragActiveRef = useRef(false);
 
     // Selection Box State
     const [selectionStart, setSelectionStart] = useState<Vector2 | null>(null);
     const [selectionCurrent, setSelectionCurrent] = useState<Vector2 | null>(null);
+
+    // Context Menu State
+    const [contextMenu, setContextMenu] = useState<{ x: number, y: number } | null>(null);
 
     // Helpers
     const getEventPoint = (e: React.MouseEvent | React.WheelEvent): Vector2 => {
@@ -39,15 +47,64 @@ const CircuitCanvas: React.FC<CanvasProps> = ({ addingType, setAddingType, toolM
         };
     };
 
+    // Attach non-passive wheel listener to prevent browser zoom
+    useEffect(() => {
+        const svg = svgRef.current;
+        if (!svg) return;
+
+        const onWheel = (e: WheelEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const rect = svg.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            setView(prev => {
+                const { zoom: oldZoom, pan: oldPan } = prev;
+                const scaleBy = 1.1;
+                const newZoomRaw = e.deltaY < 0 ? oldZoom * scaleBy : oldZoom / scaleBy;
+                
+                // Clamp zoom - MAX ZOOM OUT LIMIT set to 0.25
+                const newZoom = Math.min(Math.max(newZoomRaw, 0.25), 5);
+
+                const newPan = {
+                    x: mouseX - (mouseX - oldPan.x) * (newZoom / oldZoom),
+                    y: mouseY - (mouseY - oldPan.y) * (newZoom / oldZoom)
+                };
+
+                return { pan: newPan, zoom: newZoom };
+            });
+        };
+
+        svg.addEventListener('wheel', onWheel, { passive: false });
+        return () => svg.removeEventListener('wheel', onWheel);
+    }, []);
+
     // Handlers
     const handleContextMenu = (e: React.MouseEvent) => {
         e.preventDefault();
-        // Right click cancels current action
-        if (wiringSourceId) cancelWiring();
-        if (addingType) setAddingType(null);
+        
+        // If wiring, cancel it
+        if (wiringSourceId) {
+            cancelWiring();
+            return;
+        }
+
+        if (addingType) {
+            setAddingType(null);
+            return;
+        }
+
+        // Check if we are right-clicking a node or a selection
+        // If right click happens, we show menu at mouse position
+        if (selectedNodeIds.length > 0) {
+            setContextMenu({ x: e.clientX, y: e.clientY });
+        }
     };
 
     const handleMouseDown = (e: React.MouseEvent) => {
+        setContextMenu(null); // Close menu on click
         const worldPos = getEventPoint(e);
 
         // Middle mouse or Space+Left for Pan regardless of tool
@@ -73,12 +130,14 @@ const CircuitCanvas: React.FC<CanvasProps> = ({ addingType, setAddingType, toolM
         // Add Node Logic
         if (addingType && e.button === 0) {
             const pos = getEventPoint(e);
-            // Center node on click
+            
             addNode(addingType, { 
                 x: Math.round(pos.x / 10) * 10 - NODE_WIDTH/2, 
                 y: Math.round(pos.y / 10) * 10 - NODE_HEIGHT/2
-            });
+            }, (window as any)._tempCustomData); // HACK: Global temp data
+            
             setAddingType(null);
+            (window as any)._tempCustomData = undefined;
         }
         
         // Deselect if clicking background (handled implicitly by box select logic mostly, but good for pan mode)
@@ -92,6 +151,8 @@ const CircuitCanvas: React.FC<CanvasProps> = ({ addingType, setAddingType, toolM
         e.stopPropagation();
         if (e.button === 0) {
             setDragNodeId(id);
+            isNodeDragActiveRef.current = false; // Reset drag flag
+
             // Multi-select logic
             if (e.shiftKey) {
                 selectNode(id, true);
@@ -115,20 +176,22 @@ const CircuitCanvas: React.FC<CanvasProps> = ({ addingType, setAddingType, toolM
                 // Pan Background
                 const dx = e.clientX - dragStart.x;
                 const dy = e.clientY - dragStart.y;
-                setPan(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+                setView(prev => ({ ...prev, pan: { x: prev.pan.x + dx, y: prev.pan.y + dy } }));
                 setDragStart({ x: e.clientX, y: e.clientY });
             }
         }
 
         if (dragNodeId) {
+            // Drag Start Detection for Undo
+            if (!isNodeDragActiveRef.current) {
+                isNodeDragActiveRef.current = true;
+                saveSnapshot(); // Save state before modifying positions
+            }
+
             // Drag Nodes (move all selected)
             const dx = e.movementX / zoom;
             const dy = e.movementY / zoom;
             
-            // This is a naive implementation that moves state on every frame. 
-            // Ideally we'd just update local transform and commit on Up.
-            // But for now we update all selected nodes.
-            // Note: This might be slow with many nodes.
             selectedNodeIds.forEach(id => {
                const node = allNodes.find(n => n.id === id);
                if (node) {
@@ -145,31 +208,37 @@ const CircuitCanvas: React.FC<CanvasProps> = ({ addingType, setAddingType, toolM
         
         setIsDragging(false);
         setDragNodeId(null);
+        isNodeDragActiveRef.current = false;
         setSelectionStart(null);
         setSelectionCurrent(null);
     };
 
-    const handleWheel = (e: React.WheelEvent) => {
-        e.preventDefault(); 
-        const scaleBy = 1.1;
-        const oldZoom = zoom;
-        const newZoom = e.deltaY < 0 ? oldZoom * scaleBy : oldZoom / scaleBy;
-        
-        // Clamp zoom - MAX ZOOM OUT LIMIT set to 0.25
-        const clampedZoom = Math.min(Math.max(newZoom, 0.25), 5);
-        
-        const rect = svgRef.current!.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-        
-        const newPan = {
-            x: mouseX - (mouseX - pan.x) * (clampedZoom / oldZoom),
-            y: mouseY - (mouseY - pan.y) * (clampedZoom / oldZoom)
-        };
-
-        setPan(newPan);
-        setZoom(clampedZoom);
+    // Simplify / Expand Handlers
+    const handleSimplify = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setContextMenu(null);
+        // Timeout to allow menu to close before prompt blocks thread
+        setTimeout(() => {
+            const name = prompt("Enter Custom Component Name:", "MyLogic");
+            if (name) {
+                createCustomComponent(name);
+            }
+        }, 50);
     };
+
+    const handleExpand = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (selectedNodeIds.length === 1) {
+            ungroupNode(selectedNodeIds[0]);
+        }
+        setContextMenu(null);
+    };
+
+    const handleDelete = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        removeNodes(selectedNodeIds); 
+        setContextMenu(null);
+    }
 
     // Render Temporary Wire
     const renderTempWire = () => {
@@ -214,7 +283,7 @@ const CircuitCanvas: React.FC<CanvasProps> = ({ addingType, setAddingType, toolM
     };
 
     return (
-        <div className="w-full h-full bg-[#0f172a] overflow-hidden cursor-crosshair">
+        <div className="w-full h-full bg-[#0f172a] overflow-hidden cursor-crosshair relative">
             <svg
                 ref={svgRef}
                 className={`w-full h-full block touch-none ${toolMode === 'PAN' && isDragging ? 'cursor-grabbing' : ''}`}
@@ -222,7 +291,6 @@ const CircuitCanvas: React.FC<CanvasProps> = ({ addingType, setAddingType, toolM
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 onMouseLeave={handleMouseUp}
-                onWheel={handleWheel}
                 onContextMenu={handleContextMenu}
             >
                 <defs>
@@ -266,6 +334,38 @@ const CircuitCanvas: React.FC<CanvasProps> = ({ addingType, setAddingType, toolM
                 </g>
             </svg>
             
+            {/* Context Menu */}
+            {contextMenu && (
+                <div 
+                    className="absolute bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden py-1 min-w-[150px] z-50"
+                    style={{ left: contextMenu.x, top: contextMenu.y }}
+                    onMouseDown={(e) => e.stopPropagation()} // Prevent closing immediately if clicking within menu
+                >
+                    {selectedNodeIds.length > 1 && (
+                        <button 
+                            onClick={handleSimplify}
+                            className="w-full text-left px-4 py-2 text-sm text-white hover:bg-slate-700 transition-colors"
+                        >
+                            Simplify (Save to Custom)
+                        </button>
+                    )}
+                    {selectedNodeIds.length === 1 && allNodes.find(n => n.id === selectedNodeIds[0])?.type === 'CUSTOM_IC' && (
+                         <button 
+                            onClick={handleExpand}
+                            className="w-full text-left px-4 py-2 text-sm text-white hover:bg-slate-700 transition-colors"
+                        >
+                            Expand IC
+                        </button>
+                    )}
+                    <button 
+                        onClick={handleDelete}
+                        className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-slate-700 transition-colors"
+                    >
+                        Delete
+                    </button>
+                </div>
+            )}
+
             {/* Zoom Indicator */}
             <div className="absolute bottom-4 right-4 bg-slate-800 text-slate-400 text-xs px-2 py-1 rounded select-none pointer-events-none">
                 {Math.round(zoom * 100)}%

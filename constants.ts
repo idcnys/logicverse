@@ -12,6 +12,7 @@ export const COMPONENT_CONFIGS: Record<NodeType, LogicGateConfig> = {
   SWITCH: { inputs: 0, color: '#3b82f6', label: 'SW', description: 'Toggle Switch', category: 'Input' },
   BUTTON: { inputs: 0, color: '#ef4444', label: 'BTN', description: 'Momentary Push Button', category: 'Input' },
   CLOCK: { inputs: 0, color: '#8b5cf6', label: 'CLK', description: 'Square Wave Oscillator', category: 'Input' },
+  GAMEPAD: { inputs: 0, color: '#6366f1', label: 'PAD', description: 'Game Controller (WASD/Arrows)', category: 'Input', width: 120, height: 80 },
   HIGH: { inputs: 0, color: '#10b981', label: '1', description: 'Constant High Voltage', category: 'Input', width: 50 },
   LOW: { inputs: 0, color: '#64748b', label: '0', description: 'Constant Low Voltage (GND)', category: 'Input', width: 50 },
 
@@ -48,7 +49,15 @@ export const COMPONENT_CONFIGS: Record<NodeType, LogicGateConfig> = {
   LED_GREEN: { inputs: 1, color: '#22c55e', label: 'G', description: 'Green LED', category: 'Output', width: 50, height: 50 },
   LED_BLUE: { inputs: 1, color: '#3b82f6', label: 'B', description: 'Blue LED', category: 'Output', width: 50, height: 50 },
   SEVEN_SEG: { inputs: 4, color: '#dc2626', label: '8', description: 'Hex Display (1,2,4,8)', category: 'Output', width: 100, height: 120 },
+  MATRIX_DISPLAY: { inputs: 11, color: '#22c55e', label: 'SCR', description: '16x16 Pixel Screen (X0-3, Y0-3, D, WE, CLK)', category: 'Output', width: 160, height: 160 },
+  BUZZER: { inputs: 1, color: '#f43f5e', label: 'SPK', description: 'Buzzer (Sound on High)', category: 'Output', width: 50, height: 50 },
 
   // TOOLS
   LABEL: { inputs: 0, color: '#94a3b8', label: 'ABC', description: 'Text Label', category: 'Tools', width: 120, height: 40 },
+  JUNCTION: { inputs: 1, color: '#94a3b8', label: '', description: 'Wire Junction', category: 'Tools', width: 24, height: 24 },
+  
+  // CUSTOM
+  CUSTOM_IC: { inputs: 0, color: '#64748b', label: 'IC', description: 'Custom Integrated Circuit', category: 'Custom' },
+  CUSTOM_INPUT: { inputs: 0, color: '#8b5cf6', label: 'IN', description: 'Input Terminal for Custom IC', category: 'Custom', width: 50, height: 40 },
+  CUSTOM_OUTPUT: { inputs: 1, color: '#ec4899', label: 'OUT', description: 'Output Terminal for Custom IC', category: 'Custom', width: 50, height: 40 },
 };

@@ -16,26 +16,28 @@ const Wire: React.FC<WireProps> = ({ connection, sourceNode, targetNode }) => {
   const targetConfig = COMPONENT_CONFIGS[targetNode.type];
 
   // Source Dims
-  const sW = sourceConfig.width || NODE_WIDTH;
-  const sH = sourceConfig.height || NODE_HEIGHT;
-  const tH = targetConfig.height || NODE_HEIGHT;
+  const sW = sourceNode.subCircuit?.width || sourceConfig.width || NODE_WIDTH;
+  const sH = sourceNode.subCircuit?.height || sourceConfig.height || NODE_HEIGHT;
+  const tH = targetNode.subCircuit?.height || targetConfig.height || NODE_HEIGHT;
 
   // Calculate Start Position (Right side of source)
   // Needs to account for multiple outputs now
   const outputIndex = connection.sourceOutputIndex || 0;
   let outputCount = 1;
   
-  // Logic to determine output count matching LogicNode logic
   if (sourceNode.type === 'FULL_ADDER') outputCount = 2;
   else if (['REGISTER_4BIT', 'COUNTER_4BIT', 'DECODER_2TO4'].includes(sourceNode.type)) outputCount = 4;
   else if (sourceNode.type === 'ALU_4BIT') outputCount = 6;
+  else if (sourceNode.type === 'CUSTOM_IC' && sourceNode.subCircuit) outputCount = sourceNode.subCircuit.outputMap.length;
+  else if (sourceNode.type === 'GAMEPAD') outputCount = 6;
   
   const sourceSpacing = sH / (outputCount + 1);
   const startX = sourceNode.position.x + sW;
   const startY = sourceNode.position.y + (outputIndex + 1) * sourceSpacing;
 
   // Calculate End Position (Left side of target)
-  const inputCount = targetConfig.inputs;
+  const inputCount = targetNode.type === 'CUSTOM_IC' && targetNode.subCircuit ? targetNode.subCircuit.inputMap.length : targetConfig.inputs;
+  
   const spacing = tH / (inputCount + 1);
   const targetX = targetNode.position.x;
   const targetY = targetNode.position.y + (connection.targetInputIndex + 1) * spacing;
@@ -51,6 +53,10 @@ const Wire: React.FC<WireProps> = ({ connection, sourceNode, targetNode }) => {
   // Check state of specific output bit
   let isActive = sourceNode.state; // Default
   if (['FULL_ADDER', 'REGISTER_4BIT', 'COUNTER_4BIT', 'ALU_4BIT', 'DECODER_2TO4'].includes(sourceNode.type)) {
+      isActive = ((sourceNode.internalState || 0) >> outputIndex & 1) === 1;
+  } else if (sourceNode.type === 'CUSTOM_IC') {
+      isActive = ((sourceNode.internalState || 0) >> outputIndex & 1) === 1;
+  } else if (sourceNode.type === 'GAMEPAD') {
       isActive = ((sourceNode.internalState || 0) >> outputIndex & 1) === 1;
   }
 
