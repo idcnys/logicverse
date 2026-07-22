@@ -5,6 +5,8 @@
 
 LogicVerse 2D is a browser-based digital circuit playground for building, simulating, and sharing logic circuits with gates, memory blocks, ICs, and custom modules.
 
+[Try it now](https://lvsim.vercel.app/)
+
 ## Features
 
 - Interactive 2D canvas with pan, zoom, and box selection
