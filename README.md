@@ -1,6 +1,6 @@
 # LogicVerse 2D
 
-<img width="500" alt="image" src="https://github.com/user-attachments/assets/3f5ab6ac-1b17-46be-80fe-fc068133c4c1" />
+<img width="800" alt="image" src="https://github.com/user-attachments/assets/3f5ab6ac-1b17-46be-80fe-fc068133c4c1" />
 
 
 LogicVerse 2D is a browser-based digital circuit playground for building, simulating, and sharing logic circuits with gates, memory blocks, ICs, and custom modules.
