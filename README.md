@@ -1,4 +1,7 @@
-# LogicVerse 2D
+<div align="center">
+
+  # LogicVerse 2D
+</div>
 
 <img width="800" alt="image" src="https://github.com/user-attachments/assets/3f5ab6ac-1b17-46be-80fe-fc068133c4c1" />
 
@@ -18,45 +21,6 @@ LogicVerse 2D is a browser-based digital circuit playground for building, simula
 - Custom IC workflow (simplify selected nodes into reusable modules)
 - Custom IC library import/export via JSON
 
-## Tech Stack
-
-- React 19 + TypeScript
-- Vite
-- SVG-based canvas rendering
-- Tailwind CSS (via CDN)
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+ (recommended: latest LTS)
-- npm 9+
-
-### Install
-
-```bash
-npm ci
-```
-
-### Start development server
-
-```bash
-npm run dev
-```
-
-Then open the local Vite URL (usually `http://localhost:5173`).
-
-### Build for production
-
-```bash
-npm run build
-```
-
-### Preview production build
-
-```bash
-npm run preview
-```
 
 ## How to Use
 
@@ -144,14 +108,6 @@ Additional Custom actions:
 - **Output**: Lights, LEDs, seven segment, matrix display, buzzer
 - **Tools**: Label, junction
 - **Custom / IO**: Custom ICs and custom input/output terminals
-
-## Project Structure
-
-- `/App.tsx` – app shell and global keyboard shortcuts
-- `/store.tsx` – circuit state, history, clipboard, custom module handling
-- `/services/circuitEngine.ts` – simulation/evaluation engine
-- `/components/Canvas/*` – canvas, nodes, and wire rendering
-- `/components/UI/*` – toolbar and UI overlays
 
 ## Notes
 
